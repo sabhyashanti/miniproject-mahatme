@@ -1,0 +1,177 @@
+/* frontend/src/pages/StaffPortal.css */
+.staff-container {
+  padding: 30px;
+  max-width: 900px;
+  margin: 0 auto;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f4f7f6;
+  min-height: 100vh;
+}
+
+.staff-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #0056b3;
+  padding-bottom: 20px;
+  margin-bottom: 30px;
+}
+
+.staff-header h1 {
+  color: #002b5e;
+  margin: 0;
+}
+
+.role-toggle {
+  display: flex;
+  gap: 10px;
+}
+
+.role-btn {
+  padding: 10px 20px;
+  border: 2px solid #0056b3;
+  background-color: white;
+  color: #0056b3;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.3s;
+}
+
+.role-btn.active {
+  background-color: #0056b3;
+  color: white;
+}
+
+/* Reception Panel */
+.reception-panel, .doctor-panel {
+  background: white;
+  padding: 30px;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+  margin-bottom: 30px;
+}
+
+.input-group {
+  display: flex;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.patient-input {
+  flex: 1;
+  padding: 15px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 16px;
+}
+
+.generate-btn {
+  padding: 15px 30px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.generate-btn:hover {
+  background-color: #218838;
+}
+
+/* Doctor Panel */
+.current-serving {
+  background-color: #eaf4ff;
+  border-left: 5px solid #0056b3;
+  padding: 20px;
+  border-radius: 5px;
+  margin-bottom: 20px;
+}
+
+.current-serving h2 {
+  margin: 0 0 10px 0;
+  color: #002b5e;
+}
+
+.token-display {
+  font-size: 48px;
+  font-weight: bold;
+  color: #d9534f;
+  margin: 0;
+}
+
+.call-next-btn {
+  width: 100%;
+  padding: 20px;
+  background-color: #0056b3;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 4px 6px rgba(0,86,179,0.3);
+}
+
+.call-next-btn:hover {
+  background-color: #004494;
+}
+
+/* Live Queue Table */
+.queue-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+
+.queue-table th, .queue-table td {
+  padding: 15px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.queue-table th {
+  background-color: #f8f9fa;
+  color: #333;
+}
+
+.status-badge {
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: bold;
+}
+/* Patient Registration Form */
+.registration-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.form-group-full {
+  grid-column: span 2;
+}
+
+.patient-input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.generate-btn {
+  grid-column: span 2;
+  margin-top: 10px;
+}
+
+.status-waiting { background-color: #ffeeba; color: #856404; }
+.status-serving { background-color: #b8daff; color: #004085; }
+.status-done { background-color: #c3e6cb; color: #155724; }
