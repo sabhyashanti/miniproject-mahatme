@@ -29,7 +29,7 @@ function TVSimulation() {
     const fetchData = async () => {
       try {
         // 1. Fetch Patient Queue
-        const queueResponse = await fetch('http://localhost:5000/api/patients');
+        const queueResponse = await fetch('https://mahatme-backend.onrender.com/api/patients');
         if (queueResponse.ok) {
           const data = await queueResponse.json();
           
@@ -52,7 +52,7 @@ function TVSimulation() {
         }
 
         // 2. Fetch Live TV Settings (CMS & Emergency)
-        const settingsResponse = await fetch('http://localhost:5000/api/settings');
+        const settingsResponse = await fetch('https://mahatme-backend.onrender.com/api/settings');
         if (settingsResponse.ok) {
           const settingsData = await settingsResponse.json();
           if (settingsData) {

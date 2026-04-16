@@ -22,7 +22,7 @@ function StaffPortal() {
   // --- FETCH LIVE QUEUE FROM DATABASE ---
   const fetchQueue = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/patients');
+      const response = await fetch('https://mahatme-backend.onrender.com/api/patients');
       if (response.ok) {
         const data = await response.json();
         setQueue(data);
@@ -71,7 +71,7 @@ function StaffPortal() {
     };
 
     try {
-      const response = await fetch('http://localhost:5000/api/patients', {
+      const response = await fetch('https://mahatme-backend.onrender.com/api/patients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patientData),
@@ -98,7 +98,7 @@ function StaffPortal() {
   // --- DOCTOR: Call Next Patient (via Backend) ---
   const handleCallNext = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/patients/next', {
+      const response = await fetch('https://mahatme-backend.onrender.com/api/patients/next', {
         method: 'PUT'
       });
       

@@ -28,7 +28,7 @@ function AdminDashboard() {
   // --- FETCH LIVE QUEUE WHEN CLICKED ---
   const fetchLiveQueue = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/patients');
+      const response = await fetch('https://mahatme-backend.onrender.com/api/patients');
       if (response.ok) {
         const data = await response.json();
         setLiveQueueData(data);
@@ -51,7 +51,7 @@ function AdminDashboard() {
   const handleAdminSignup = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('http://localhost:5000/api/signup', {
+      const response = await fetch('https://mahatme-backend.onrender.com/api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newUser),
@@ -74,7 +74,7 @@ function AdminDashboard() {
   const handleCMSUpload = async (e) => {
     e.preventDefault();
     try {
-      await fetch('http://localhost:5000/api/settings', {
+      await fetch('https://mahatme-backend.onrender.com/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ video_url: cmsInput.video, announcement: cmsInput.text, is_emergency: false })
@@ -90,7 +90,7 @@ function AdminDashboard() {
   const handleEmergencyTrigger = async (e) => {
     e.preventDefault();
     try {
-      await fetch('http://localhost:5000/api/settings', {
+      await fetch('https://mahatme-backend.onrender.com/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_emergency: true, emergency_text: emergencyInput })
@@ -104,7 +104,7 @@ function AdminDashboard() {
   // --- ADMIN: Clear Emergency ---
   const clearEmergency = async () => {
     try {
-      await fetch('http://localhost:5000/api/settings', {
+      await fetch('https://mahatme-backend.onrender.com/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_emergency: false })

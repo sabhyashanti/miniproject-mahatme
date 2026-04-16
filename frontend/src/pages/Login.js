@@ -11,7 +11,7 @@ function Login() {
     e.preventDefault();
     
     // Always call the login API
-    const endpoint = 'http://localhost:5000/api/login';
+    const endpoint = 'https://mahatme-backend.onrender.com/api/login';
     const bodyData = { username, password };
 
     try {
