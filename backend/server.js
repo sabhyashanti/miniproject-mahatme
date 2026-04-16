@@ -77,6 +77,77 @@ app.post('/api/patients', async (req, res) => {
   }
 });
 
+// --- GET LIVE QUEUE ENDPOINT (For TV Display) ---
+app.get('/api/patients', async (req, res) => {
+  try {
+    // Fetch all patients for today, ordered by when they were added
+    const result = await pool.query("SELECT * FROM patients WHERE status IN ('Waiting', 'Serving') ORDER BY created_at ASC");
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch queue' });
+  }
+});
+
+// --- UPDATE QUEUE (DOCTOR CALLS NEXT PATIENT) ---
+app.put('/api/patients/next', async (req, res) => {
+  try {
+    console.log("--> [QUEUE] Doctor requested next patient...");
+
+    // 1. Mark the currently 'Serving' patient as 'Done'
+    const doneResult = await pool.query("UPDATE patients SET status = 'Done' WHERE status = 'Serving' RETURNING id");
+    console.log(`    - Marked ${doneResult.rowCount} patient(s) as Done.`);
+    
+    // 2. Safely find the oldest 'Waiting' patient
+    const nextPatient = await pool.query("SELECT id FROM patients WHERE status = 'Waiting' ORDER BY created_at ASC LIMIT 1");
+    
+    // If no one is waiting, tell the frontend the queue is empty
+    if (nextPatient.rows.length === 0) {
+        console.log("    - No waiting patients found in database.");
+        return res.json({ message: 'Queue is already empty', serving: null });
+    }
+
+    // 3. Upgrade that specific patient to 'Serving'
+    const result = await pool.query(
+      "UPDATE patients SET status = 'Serving' WHERE id = $1 RETURNING *",
+      [nextPatient.rows[0].id]
+    );
+    
+    console.log(`    - Upgraded Token ${result.rows[0].token} to Serving!`);
+    res.json({ message: 'Queue updated successfully!', serving: result.rows[0] });
+
+  } catch (err) {
+    console.error("❌ ERROR updating queue:", err.message);
+    res.status(500).json({ error: 'Database failed to update the queue.' });
+  }
+});
+
+// --- GET SYSTEM SETTINGS (For TV Display) ---
+app.get('/api/settings', async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM system_settings WHERE id = 1");
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
+// --- UPDATE SYSTEM SETTINGS (From Admin Panel) ---
+app.put('/api/settings', async (req, res) => {
+  const { video_url, announcement, is_emergency, emergency_text } = req.body;
+  try {
+    await pool.query(
+      "UPDATE system_settings SET video_url = COALESCE($1, video_url), announcement = COALESCE($2, announcement), is_emergency = COALESCE($3, is_emergency), emergency_text = COALESCE($4, emergency_text) WHERE id = 1",
+      [video_url, announcement, is_emergency, emergency_text]
+    );
+    res.json({ message: 'System updated successfully!' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update settings' });
+  }
+});
+
 // --- START SERVER ---
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
