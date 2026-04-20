@@ -21,7 +21,7 @@ function App() {
         <Route path="/doctor" element={<DoctorDashboard />} />
         
         {/* Physical Output Simulation */}
-        <Route path="/display" element={<TVSimulation />} />
+        <Route path="/display/:tvId" element={<TVSimulation />} />
       </Routes>
     </Router>
   );

@@ -264,7 +264,15 @@ function AdminDashboard() {
                   <h2>Network Hardware Status</h2>
                   <p style={{ color: '#666', marginBottom: '10px' }}>Click a board below to preview its live output.</p>
                   <table className="detail-table">
-                    <thead><tr><th>ID</th><th>Location</th><th>Network</th><th>Status</th></tr></thead>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Location</th>
+                        <th>Network</th>
+                        <th>Status</th>
+                        <th>Action</th> {/* ADDED HEADER HERE */}
+                      </tr>
+                    </thead>
                     <tbody>
                       {tvNetworkData.map(tv => (
                         <tr key={tv.id} onClick={() => setSelectedPreviewTV(tv)} style={{ cursor: 'pointer', backgroundColor: selectedPreviewTV?.id === tv.id ? '#eef2f6' : 'transparent' }}>
@@ -272,6 +280,17 @@ function AdminDashboard() {
                           <td>{tv.tv_name}</td>
                           <td><span style={{ color: 'green', fontWeight: 'bold' }}>● Online</span></td>
                           <td>{tv.is_emergency ? <span style={{ color: 'red', fontWeight: 'bold' }}>🚨 OVERRIDE</span> : 'Normal'}</td>
+                          
+                          {/* ADDED LAUNCH BUTTON HERE */}
+                          <td>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); window.open(`/display/${tv.id}`, '_blank'); }} 
+                              style={{ backgroundColor: '#17a2b8', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                            >
+                              📺 Launch TV
+                            </button>
+                          </td>
+
                         </tr>
                       ))}
                     </tbody>
