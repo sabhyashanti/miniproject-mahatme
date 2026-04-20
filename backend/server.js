@@ -169,25 +169,34 @@ app.put('/api/patients/next', async (req, res) => {
   }
 });
 
-// --- GET SYSTEM SETTINGS (For TV Display) ---
+// --- GET ALL SYSTEM SETTINGS (For Admin & TVs) ---
 app.get('/api/settings', async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM system_settings WHERE id = 1");
-    res.json(result.rows[0]);
+    const result = await pool.query("SELECT * FROM system_settings ORDER BY id ASC");
+    res.json(result.rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch settings' });
   }
 });
 
-// --- UPDATE SYSTEM SETTINGS (From Admin Panel) ---
+// --- UPDATE SYSTEM SETTINGS (Individual or All TVs) ---
 app.put('/api/settings', async (req, res) => {
-  const { video_url, announcement, is_emergency, emergency_text } = req.body;
+  const { tv_id, video_url, announcement, is_emergency, emergency_text } = req.body;
   try {
-    await pool.query(
-      "UPDATE system_settings SET video_url = COALESCE($1, video_url), announcement = COALESCE($2, announcement), is_emergency = COALESCE($3, is_emergency), emergency_text = COALESCE($4, emergency_text) WHERE id = 1",
-      [video_url, announcement, is_emergency, emergency_text]
-    );
+    if (tv_id === 'all') {
+      // Update ALL TVs in the hospital
+      await pool.query(
+        "UPDATE system_settings SET video_url = COALESCE($1, video_url), announcement = COALESCE($2, announcement), is_emergency = COALESCE($3, is_emergency), emergency_text = COALESCE($4, emergency_text)",
+        [video_url, announcement, is_emergency, emergency_text]
+      );
+    } else {
+      // Update a SPECIFIC TV
+      await pool.query(
+        "UPDATE system_settings SET video_url = COALESCE($1, video_url), announcement = COALESCE($2, announcement), is_emergency = COALESCE($3, is_emergency), emergency_text = COALESCE($4, emergency_text) WHERE id = $5",
+        [video_url, announcement, is_emergency, emergency_text, tv_id]
+      );
+    }
     res.json({ message: 'System updated successfully!' });
   } catch (err) {
     console.error(err);

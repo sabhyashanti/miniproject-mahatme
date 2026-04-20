@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './AdminDashboard.css';
 
@@ -9,41 +9,57 @@ function AdminDashboard() {
   // States for the interactive Overview
   const [expandedStat, setExpandedStat] = useState(null);
   const [liveQueueData, setLiveQueueData] = useState([]);
+  const [tvNetworkData, setTvNetworkData] = useState([]);
+  const [selectedPreviewTV, setSelectedPreviewTV] = useState(null); // For TV Live Preview
   
-  // State for adding new staff members (Updated to use Email instead of Password)
+  // State for adding new staff members
   const [newUser, setNewUser] = useState({
     username: '',
     email: '', 
     role: 'receptionist' 
   });
 
-  // States for CMS and Emergency Overrides
-  const [cmsInput, setCmsInput] = useState({ video: '', text: '' });
+  // States for CMS and Emergency Overrides (Updated for Multi-TV)
+  const [cmsInput, setCmsInput] = useState({ targetTV: 'all', video: '', text: '' });
   const [emergencyInput, setEmergencyInput] = useState('');
 
   const handleLogout = () => {
     navigate('/');
   };
 
-  // --- FETCH LIVE QUEUE WHEN CLICKED ---
-  const fetchLiveQueue = async () => {
+  // --- FETCH DYNAMIC DASHBOARD DATA ---
+  const fetchData = async () => {
     try {
-      const response = await fetch('https://mahatme-backend.onrender.com/api/patients');
-      if (response.ok) {
-        const data = await response.json();
-        setLiveQueueData(data);
+      // 1. Fetch Live Patient Queue
+      const queueResponse = await fetch('https://mahatme-backend.onrender.com/api/patients');
+      if (queueResponse.ok) {
+        setLiveQueueData(await queueResponse.json());
+      }
+
+      // 2. Fetch Live TV Network Data
+      const tvResponse = await fetch('https://mahatme-backend.onrender.com/api/settings');
+      if (tvResponse.ok) {
+        setTvNetworkData(await tvResponse.json());
       }
     } catch (error) {
-      console.error("Failed to fetch live queue for dashboard");
+      console.error("Failed to fetch live data for dashboard");
     }
   };
+
+  // Fetch data automatically when Overview or CMS tabs are opened
+  useEffect(() => {
+    if (activeTab === 'dashboard' || activeTab === 'cms') {
+      fetchData();
+    }
+  }, [activeTab]);
 
   const toggleStat = (statName) => {
     if (expandedStat === statName) {
       setExpandedStat(null); // Close if already open
+      setSelectedPreviewTV(null);
     } else {
       setExpandedStat(statName);
-      if (statName === 'queue') fetchLiveQueue(); // Fetch real data if queue is clicked
+      fetchData(); // Fetch fresh data when opening a stat panel
     }
   };
 
@@ -61,7 +77,7 @@ function AdminDashboard() {
 
       if (response.ok) {
         alert(`Successfully registered ${newUser.username} as ${newUser.role}`);
-        setNewUser({ username: '', email: '', role: 'receptionist' }); // Reset form to default
+        setNewUser({ username: '', email: '', role: 'receptionist' }); 
       } else {
         alert(data.error);
       }
@@ -77,25 +93,32 @@ function AdminDashboard() {
       await fetch('https://mahatme-backend.onrender.com/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ video_url: cmsInput.video, announcement: cmsInput.text, is_emergency: false })
+        body: JSON.stringify({ 
+          tv_id: cmsInput.targetTV, 
+          video_url: cmsInput.video || null, // Send null if left blank
+          announcement: cmsInput.text || null, 
+          is_emergency: false 
+        })
       });
-      alert("TV Display Updated Successfully!");
-      setCmsInput({ video: '', text: '' }); // Clear input
+      alert(cmsInput.targetTV === 'all' ? "All TV Displays Updated Successfully!" : `TV-0${cmsInput.targetTV} Updated Successfully!`);
+      setCmsInput({ targetTV: 'all', video: '', text: '' }); // Clear input
+      fetchData(); // Refresh the preview data
     } catch (error) {
       alert("Failed to update TV screens. Is the server running?");
     }
   };
 
-  // --- ADMIN: Trigger Emergency ---
+  // --- ADMIN: Trigger Emergency (Always affects ALL TVs) ---
   const handleEmergencyTrigger = async (e) => {
     e.preventDefault();
     try {
       await fetch('https://mahatme-backend.onrender.com/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_emergency: true, emergency_text: emergencyInput })
+        body: JSON.stringify({ tv_id: 'all', is_emergency: true, emergency_text: emergencyInput })
       });
       alert("🚨 EMERGENCY OVERRIDE DEPLOYED TO ALL SCREENS 🚨");
+      fetchData();
     } catch (error) {
       alert("Failed to trigger emergency protocol.");
     }
@@ -107,27 +130,20 @@ function AdminDashboard() {
       await fetch('https://mahatme-backend.onrender.com/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_emergency: false })
+        body: JSON.stringify({ tv_id: 'all', is_emergency: false })
       });
       alert("Emergency cleared. Systems returned to normal.");
-      setEmergencyInput(''); // Clear input
+      setEmergencyInput(''); 
+      fetchData();
     } catch (error) {
       alert("Failed to clear emergency.");
     }
   };
 
-  // --- MOCK DATA FOR DASHBOARD STATS ---
-  const mockBoards = [
-    { id: 'TV-01', location: 'Main Reception OPD', status: 'Online', ip: '192.168.1.10' },
-    { id: 'TV-02', location: 'Retina Department', status: 'Online', ip: '192.168.1.11' },
-    { id: 'TV-03', location: 'Cataract Waiting', status: 'Online', ip: '192.168.1.12' },
-    { id: 'TV-04', location: 'Pharmacy', status: 'Offline', ip: '192.168.1.13' },
-  ];
-
   const mockMedia = [
     { title: 'Eye Donation Awareness', type: 'Video', schedule: '09:00 AM - 12:00 PM', screens: 'All' },
-    { title: 'Cataract Post-Care', type: 'Image', schedule: '01:00 PM - 04:00 PM', screens: 'OPD-1' },
-    { title: 'Doctor Duty Roster', type: 'Image', schedule: 'Continuous', screens: 'Reception' },
+    { title: 'Cataract Post-Care', type: 'Image', schedule: '01:00 PM - 04:00 PM', screens: 'TV-02' },
+    { title: 'Doctor Duty Roster', type: 'Image', schedule: 'Continuous', screens: 'TV-01' },
   ];
 
   return (
@@ -168,8 +184,8 @@ function AdminDashboard() {
             <div className="stats-grid">
               <div className={`stat-card clickable ${expandedStat === 'boards' ? 'active-stat' : ''}`} onClick={() => toggleStat('boards')}>
                 <h3>Active Digital Boards</h3>
-                <p className="stat-value">3 / 4</p>
-                <small style={{color: '#0056b3'}}>Click to view details</small>
+                <p className="stat-value">{tvNetworkData.length} Online</p>
+                <small style={{color: '#0056b3'}}>Click to view network</small>
               </div>
               <div className={`stat-card clickable ${expandedStat === 'queue' ? 'active-stat' : ''}`} onClick={() => toggleStat('queue')}>
                 <h3>Total Patients in Queue</h3>
@@ -183,20 +199,64 @@ function AdminDashboard() {
               </div>
             </div>
 
+            {/* LIVE TV NETWORK STATS */}
             {expandedStat === 'boards' && (
-              <div className="stat-detail-panel">
-                <h2>Network Hardware Status</h2>
-                <table className="detail-table">
-                  <thead><tr><th>Board ID</th><th>Location</th><th>IP Address</th><th>Status</th></tr></thead>
-                  <tbody>
-                    {mockBoards.map(b => (
-                      <tr key={b.id}>
-                        <td>{b.id}</td><td>{b.location}</td><td>{b.ip}</td>
-                        <td><span style={{ color: b.status === 'Online' ? 'green' : 'red', fontWeight: 'bold' }}>{b.status}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="stat-detail-panel" style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 50%' }}>
+                  <h2>Network Hardware Status</h2>
+                  <p style={{ color: '#666', marginBottom: '10px' }}>Click a board below to preview its live output.</p>
+                  <table className="detail-table">
+                    <thead><tr><th>ID</th><th>Location</th><th>Network</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {tvNetworkData.map(tv => (
+                        <tr 
+                          key={tv.id} 
+                          onClick={() => setSelectedPreviewTV(tv)}
+                          style={{ cursor: 'pointer', backgroundColor: selectedPreviewTV?.id === tv.id ? '#eef2f6' : 'transparent' }}
+                        >
+                          <td style={{ fontWeight: 'bold' }}>TV-0{tv.id}</td>
+                          <td>{tv.tv_name}</td>
+                          <td><span style={{ color: 'green', fontWeight: 'bold' }}>● Online</span></td>
+                          <td>{tv.is_emergency ? <span style={{ color: 'red', fontWeight: 'bold' }}>🚨 OVERRIDE</span> : 'Normal'}</td>
+                        </tr>
+                      ))}
+                      {tvNetworkData.length === 0 && (
+                        <tr><td colSpan="4">Fetching network data...</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* LIVE PREVIEW BOX */}
+                {selectedPreviewTV && (
+                  <div style={{ flex: '1 1 40%', backgroundColor: '#1a1a1a', padding: '20px', borderRadius: '10px', color: 'white', display: 'flex', flexDirection: 'column' }}>
+                    <h3 style={{ margin: '0 0 15px 0', borderBottom: '1px solid #333', paddingBottom: '10px' }}>
+                      Live Preview: TV-0{selectedPreviewTV.id}
+                    </h3>
+                    
+                    <div style={{ flex: 1, backgroundColor: 'black', borderRadius: '5px', overflow: 'hidden', position: 'relative', minHeight: '200px' }}>
+                      {selectedPreviewTV.is_emergency ? (
+                        <div style={{ position: 'absolute', inset: 0, backgroundColor: '#dc3545', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', textAlign: 'center' }}>
+                          <h2 style={{ margin: 0, fontSize: '20px' }}>{selectedPreviewTV.emergency_text}</h2>
+                        </div>
+                      ) : (
+                        selectedPreviewTV.video_url ? (
+                          <iframe 
+                            src={selectedPreviewTV.video_url} 
+                            title="TV Preview" 
+                            style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}
+                          ></iframe>
+                        ) : (
+                          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>No Video Source</div>
+                        )
+                      )}
+                    </div>
+
+                    <div style={{ marginTop: '15px', backgroundColor: '#dc3545', padding: '10px', borderRadius: '5px', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      Ticker: {selectedPreviewTV.announcement || "No announcement set."}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -235,19 +295,35 @@ function AdminDashboard() {
           </>
         )}
 
-        {/* --- CMS TAB (LIVE API CONNECTED) --- */}
+        {/* --- CMS TAB (LIVE API CONNECTED & MULTI-SCREEN) --- */}
         {activeTab === 'cms' && (
           <section className="cms-panel">
             <h2>Update Live TV Content</h2>
             <form onSubmit={handleCMSUpload}>
+              
               <div className="form-group">
-                <label>Scrolling Announcement Text *</label>
+                <label>Target Screen Location *</label>
+                <select 
+                  className="auth-select"
+                  value={cmsInput.targetTV}
+                  onChange={(e) => setCmsInput({...cmsInput, targetTV: e.target.value})}
+                  required
+                >
+                  <option value="all">Broadcast to ALL Screens</option>
+                  {tvNetworkData.map(tv => (
+                    <option key={tv.id} value={tv.id}>TV-0{tv.id}: {tv.tv_name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Scrolling Announcement Text</label>
                 <input 
                   type="text" 
                   placeholder="e.g., Free Cataract Screening Camp on Sunday..." 
                   value={cmsInput.text} 
                   onChange={e => setCmsInput({...cmsInput, text: e.target.value})} 
-                  required 
+                  required={!cmsInput.video} // Require text if no video is provided
                 />
               </div>
               
@@ -260,11 +336,11 @@ function AdminDashboard() {
                   onChange={e => setCmsInput({...cmsInput, video: e.target.value})} 
                 />
                 <small style={{ color: '#666', marginTop: '5px', display: 'block' }}>
-                  Leave blank to keep the current video. Ensure it is an 'embed' link.
+                  Leave blank to keep the current video playing. Ensure it is an 'embed' link.
                 </small>
               </div>
 
-              <button type="submit" className="upload-btn">Publish to TV Screens</button>
+              <button type="submit" className="upload-btn">Publish to Selected TV(s)</button>
             </form>
           </section>
         )}
