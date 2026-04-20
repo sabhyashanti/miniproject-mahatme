@@ -14,18 +14,26 @@ function AdminDashboard() {
   const [schedules, setSchedules] = useState([]);
   const [selectedPreviewTV, setSelectedPreviewTV] = useState(null); 
   
+  // --- REAL-TIME CLOCK STATE (The Heartbeat) ---
+  const [currentTime, setCurrentTime] = useState(new Date());
+
   // --- FORM STATES ---
   const [newUser, setNewUser] = useState({ username: '', email: '', role: 'receptionist' });
-  const [cmsInput, setCmsInput] = useState({ targetTV: 'all', text: '' }); // Ticker only
+  const [cmsInput, setCmsInput] = useState({ targetTV: 'all', text: '' }); 
   const [emergencyInput, setEmergencyInput] = useState('');
-  
-  // --- NEW: MEDIA & SCHEDULE STATES ---
   const [newMedia, setNewMedia] = useState({ title: '', type: 'image', url: '' });
   const [newSchedule, setNewSchedule] = useState({ tv_id: '1', media_id: '', start_time: '', end_time: '' });
 
   const handleLogout = () => {
     navigate('/');
   };
+
+  // --- THE HEARTBEAT EFFECT ---
+  // This makes React check the clock every single second so schedules switch instantly in the preview
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // --- FETCH ALL DASHBOARD DATA ---
   const fetchData = async () => {
@@ -61,23 +69,45 @@ function AdminDashboard() {
     }
   };
 
-  // --- NEW: Check what is playing on a specific TV right now ---
+  // --- BULLETPROOF TIME CHECKER ---
   const getActiveMediaForTV = (tvId) => {
     const mySchedules = schedules.filter(s => s.tv_id === tvId);
-    const now = new Date();
-    const currentTime = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
-    return mySchedules.find(s => currentTime >= s.start_time && currentTime <= s.end_time);
+    
+    // Format the live ticking clock to match PostgreSQL "HH:MM"
+    const currentHour = String(currentTime.getHours()).padStart(2, '0');
+    const currentMinute = String(currentTime.getMinutes()).padStart(2, '0');
+    const currentHM = `${currentHour}:${currentMinute}`;
+
+    return mySchedules.find(s => {
+      const start = s.start_time.substring(0, 5);
+      const end = s.end_time.substring(0, 5);
+      return currentHM >= start && currentHM <= end;
+    });
+  };
+
+  // --- YOUTUBE AUTOPLAY FORCER ---
+  // Guarantees YouTube videos will autoplay and mute in the preview box
+  const formatYouTubeUrl = (url) => {
+    if (!url) return '';
+    if (url.includes('youtube') || url.includes('youtu.be')) {
+      let finalUrl = url;
+      const separator = finalUrl.includes('?') ? '&' : '?';
+      if (!finalUrl.includes('autoplay=1')) finalUrl += `${separator}autoplay=1`;
+      if (!finalUrl.includes('mute=1')) finalUrl += '&mute=1';
+      return finalUrl;
+    }
+    return url;
   };
 
   // ==========================================
-  // --- NEW: MEDIA LIBRARY HANDLERS ---
+  // --- MEDIA LIBRARY HANDLERS ---
   // ==========================================
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        // Converts image to a Base64 string so the database can store it directly!
+        // Converts image to a Base64 string so the database can store it directly
         setNewMedia({ ...newMedia, type: 'image', url: reader.result }); 
       };
       reader.readAsDataURL(file);
@@ -101,7 +131,7 @@ function AdminDashboard() {
   };
 
   // ==========================================
-  // --- NEW: SCHEDULING HANDLERS ---
+  // --- SCHEDULING HANDLERS ---
   // ==========================================
   const handleCreateSchedule = async (e) => {
     e.preventDefault();
@@ -227,7 +257,7 @@ function AdminDashboard() {
               </div>
             </div>
 
-            {/* LIVE TV NETWORK STATS */}
+            {/* LIVE TV NETWORK STATS & REAL-TIME PREVIEW */}
             {expandedStat === 'boards' && (
               <div className="stat-detail-panel" style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
                 <div style={{ flex: '1 1 50%' }}>
@@ -248,10 +278,13 @@ function AdminDashboard() {
                   </table>
                 </div>
 
-                {/* LIVE PREVIEW BOX */}
+                {/* THE LIVE PREVIEW BOX */}
                 {selectedPreviewTV && (
                   <div style={{ flex: '1 1 40%', backgroundColor: '#1a1a1a', padding: '20px', borderRadius: '10px', color: 'white', display: 'flex', flexDirection: 'column' }}>
-                    <h3 style={{ margin: '0 0 15px 0', borderBottom: '1px solid #333', paddingBottom: '10px' }}>Live Preview: TV-0{selectedPreviewTV.id}</h3>
+                    <h3 style={{ margin: '0 0 15px 0', borderBottom: '1px solid #333', paddingBottom: '10px', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Live Preview: TV-0{selectedPreviewTV.id}</span>
+                      <span style={{ color: '#0f0', fontSize: '14px', fontWeight: 'normal' }}>● LIVE</span>
+                    </h3>
                     <div style={{ flex: 1, backgroundColor: 'black', borderRadius: '5px', overflow: 'hidden', position: 'relative', minHeight: '200px' }}>
                       
                       {selectedPreviewTV.is_emergency ? (
@@ -259,14 +292,19 @@ function AdminDashboard() {
                           <h2 style={{ margin: 0, fontSize: '20px' }}>{selectedPreviewTV.emergency_text}</h2>
                         </div>
                       ) : getActiveMediaForTV(selectedPreviewTV.id) ? (
-                         // If there is an active schedule, show the Video or Image!
                          getActiveMediaForTV(selectedPreviewTV.id).type === 'video' ? (
-                           <iframe src={getActiveMediaForTV(selectedPreviewTV.id).url} title="Preview" style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}></iframe>
+                           // YOUTUBE AUTOPLAY IFRAME
+                           <iframe 
+                             src={formatYouTubeUrl(getActiveMediaForTV(selectedPreviewTV.id).url)} 
+                             title="Preview" 
+                             allow="autoplay; encrypted-media" 
+                             style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}
+                           ></iframe>
                          ) : (
+                           // IMAGE
                            <img src={getActiveMediaForTV(selectedPreviewTV.id).url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                          )
                       ) : (
-                        // If nothing is scheduled right now
                         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>
                           No Media Scheduled Right Now
                         </div>
@@ -444,10 +482,7 @@ function AdminDashboard() {
           <section className="cms-panel emergency-panel">
             <h2 style={{color: '#dc3545'}}>🚨 EMERGENCY OVERRIDE SYSTEM</h2>
             <form onSubmit={handleEmergencyTrigger}>
-              <div className="form-group">
-                <label>Emergency Message Text</label>
-                <textarea rows="3" value={emergencyInput} onChange={e => setEmergencyInput(e.target.value)} required style={{ width: '100%', padding: '12px' }}></textarea>
-              </div>
+              <div className="form-group"><label>Emergency Message Text</label><textarea rows="3" value={emergencyInput} onChange={e => setEmergencyInput(e.target.value)} required style={{ width: '100%', padding: '12px' }}></textarea></div>
               <button type="submit" className="emergency-btn">TRIGGER HOSPITAL-WIDE OVERRIDE</button>
               <button type="button" onClick={clearEmergency} style={{ width: '100%', padding: '15px', marginTop: '15px', backgroundColor: '#333', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>CLEAR EMERGENCY STATUS</button>
             </form>
