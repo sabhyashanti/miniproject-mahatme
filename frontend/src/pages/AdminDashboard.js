@@ -61,6 +61,14 @@ function AdminDashboard() {
     }
   };
 
+  // --- NEW: Check what is playing on a specific TV right now ---
+  const getActiveMediaForTV = (tvId) => {
+    const mySchedules = schedules.filter(s => s.tv_id === tvId);
+    const now = new Date();
+    const currentTime = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+    return mySchedules.find(s => currentTime >= s.start_time && currentTime <= s.end_time);
+  };
+
   // ==========================================
   // --- NEW: MEDIA LIBRARY HANDLERS ---
   // ==========================================
@@ -245,15 +253,25 @@ function AdminDashboard() {
                   <div style={{ flex: '1 1 40%', backgroundColor: '#1a1a1a', padding: '20px', borderRadius: '10px', color: 'white', display: 'flex', flexDirection: 'column' }}>
                     <h3 style={{ margin: '0 0 15px 0', borderBottom: '1px solid #333', paddingBottom: '10px' }}>Live Preview: TV-0{selectedPreviewTV.id}</h3>
                     <div style={{ flex: 1, backgroundColor: 'black', borderRadius: '5px', overflow: 'hidden', position: 'relative', minHeight: '200px' }}>
+                      
                       {selectedPreviewTV.is_emergency ? (
                         <div style={{ position: 'absolute', inset: 0, backgroundColor: '#dc3545', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', textAlign: 'center' }}>
                           <h2 style={{ margin: 0, fontSize: '20px' }}>{selectedPreviewTV.emergency_text}</h2>
                         </div>
+                      ) : getActiveMediaForTV(selectedPreviewTV.id) ? (
+                         // If there is an active schedule, show the Video or Image!
+                         getActiveMediaForTV(selectedPreviewTV.id).type === 'video' ? (
+                           <iframe src={getActiveMediaForTV(selectedPreviewTV.id).url} title="Preview" style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}></iframe>
+                         ) : (
+                           <img src={getActiveMediaForTV(selectedPreviewTV.id).url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                         )
                       ) : (
+                        // If nothing is scheduled right now
                         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>
-                          [Scheduled Media Playing on TV]
+                          No Media Scheduled Right Now
                         </div>
                       )}
+
                     </div>
                     <div style={{ marginTop: '15px', backgroundColor: '#dc3545', padding: '10px', borderRadius: '5px', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       Ticker: {selectedPreviewTV.announcement || "No announcement set."}
