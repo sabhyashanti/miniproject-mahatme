@@ -36,10 +36,11 @@ function AdminDashboard() {
   }, []);
 
   // --- FETCH ALL DASHBOARD DATA ---
+  // --- FETCH ALL DASHBOARD DATA ---
   const fetchData = async () => {
     try {
       const urls = [
-        'https://mahatme-backend.onrender.com/api/patients',
+        'https://mahatme-backend.onrender.com/api/queue',  // 🟢 CHANGED: Replaced /api/patients with /api/queue
         'https://mahatme-backend.onrender.com/api/settings',
         'https://mahatme-backend.onrender.com/api/media',
         'https://mahatme-backend.onrender.com/api/schedules'
