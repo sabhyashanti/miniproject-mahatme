@@ -1,4 +1,4 @@
-import React, { useState} from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './AdminDashboard.css';
 
@@ -10,14 +10,14 @@ function AdminDashboard() {
   const [expandedStat, setExpandedStat] = useState(null);
   const [liveQueueData, setLiveQueueData] = useState([]);
   
-  // State for adding new staff members
+  // State for adding new staff members (Updated to use Email instead of Password)
   const [newUser, setNewUser] = useState({
     username: '',
-    password: '',
+    email: '', 
     role: 'receptionist' 
   });
 
-  // NEW: States for CMS and Emergency Overrides
+  // States for CMS and Emergency Overrides
   const [cmsInput, setCmsInput] = useState({ video: '', text: '' });
   const [emergencyInput, setEmergencyInput] = useState('');
 
@@ -61,7 +61,7 @@ function AdminDashboard() {
 
       if (response.ok) {
         alert(`Successfully registered ${newUser.username} as ${newUser.role}`);
-        setNewUser({ username: '', password: '', role: 'receptionist' }); // Reset form to default
+        setNewUser({ username: '', email: '', role: 'receptionist' }); // Reset form to default
       } else {
         alert(data.error);
       }
@@ -302,13 +302,13 @@ function AdminDashboard() {
                 />
               </div>
               <div className="form-group">
-                <label>Temporary Password</label>
+                <label>Staff Email Address</label>
                 <input 
-                  type="password" 
+                  type="email" 
                   className="auth-input"
-                  placeholder="Enter password" 
-                  value={newUser.password}
-                  onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                  placeholder="name@hospital.com" 
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({...newUser, email: e.target.value})}
                   required 
                 />
               </div>

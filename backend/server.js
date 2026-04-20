@@ -1,8 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
+const nodemailer = require('nodemailer');
 
 const app = express();
 app.use(cors());
@@ -29,36 +29,83 @@ pool.connect()
       console.error("❌ Database connection failed. Check your connection string:", err.message);
   });
 
-// --- SIGNUP ENDPOINT ---
+// --- EMAIL TRANSPORTER SETUP ---
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+// --- OTP MEMORY STORE ---
+const otpStore = new Map();
+
+// --- SIGNUP ENDPOINT (Updated for Email) ---
 app.post('/api/signup', async (req, res) => {
-  const { username, password, role } = req.body;
+  const { username, email, role } = req.body;
   try {
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Insert a dummy password to satisfy the DB NOT NULL constraint while using OTP
     const result = await pool.query(
-      'INSERT INTO users (username, password, role) VALUES ($1, $2, $3) RETURNING id, username, role',
-      [username, hashedPassword, role]
+      "INSERT INTO users (username, password, role, email) VALUES ($1, 'dummy_pass_otp_used', $2, $3) RETURNING id, username, role",
+      [username, role, email]
     );
     res.status(201).json({ message: 'User created successfully!', user: result.rows[0] });
   } catch (err) {
-    if (err.code === '23505') res.status(400).json({ error: 'Username already exists' });
+    if (err.code === '23505') res.status(400).json({ error: 'Username or Email already exists' });
     else res.status(500).json({ error: 'Database error' });
   }
 });
 
-// --- LOGIN ENDPOINT ---
-app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
+// --- REQUEST OTP ENDPOINT ---
+app.post('/api/request-otp', async (req, res) => {
+  const { email } = req.body;
   try {
-    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-    if (result.rows.length === 0) return res.status(400).json({ error: 'User not found' });
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Email not registered in the system.' });
 
-    const user = result.rows[0];
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) return res.status(400).json({ error: 'Invalid password' });
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    otpStore.set(email, { otp, expires: Date.now() + 300000 }); // Expires in 5 mins
 
-    res.json({ message: 'Login successful', role: user.role });
+    // Fallback: Always print OTP to backend terminal (Safety net for presentations)
+    console.log(`\n🔑 OTP for ${email}: ${otp}\n`);
+
+    // Send Email
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: 'Mahatme Hospital - Your Login OTP',
+      html: `<h2>Secure System Access</h2>
+             <p>Your authentication code is: <b style="font-size: 24px; color: #0056b3; letter-spacing: 3px;">${otp}</b></p>
+             <p>This code expires in 5 minutes.</p>`
+    });
+
+    res.json({ message: 'OTP sent successfully to your email!' });
   } catch (err) {
-    res.status(500).json({ error: 'Database error' });
+    console.error("OTP Error:", err);
+    res.status(500).json({ error: 'Server error sending email. Check backend terminal for code.' });
+  }
+});
+
+// --- VERIFY OTP ENDPOINT ---
+app.post('/api/verify-otp', async (req, res) => {
+  const { email, otp } = req.body;
+  try {
+    const storedData = otpStore.get(email);
+    if (!storedData) return res.status(400).json({ error: 'OTP expired or not requested.' });
+    if (Date.now() > storedData.expires) {
+      otpStore.delete(email);
+      return res.status(400).json({ error: 'OTP has expired.' });
+    }
+    if (storedData.otp !== otp) return res.status(400).json({ error: 'Invalid OTP.' });
+
+    // OTP is correct! Fetch user
+    const result = await pool.query('SELECT username, role FROM users WHERE email = $1', [email]);
+    otpStore.delete(email); // Clear OTP so it cannot be reused
+    res.json({ message: 'Login successful', role: result.rows[0].role, username: result.rows[0].username });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error verifying OTP.' });
   }
 });
 
