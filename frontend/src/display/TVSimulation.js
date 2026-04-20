@@ -1,144 +1,158 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import './TVSimulation.css';
 
 function TVSimulation() {
-  const [servingToken, setServingToken] = useState(null);
-  const [waitingTokens, setWaitingTokens] = useState([]);
-  const [isNewCall, setIsNewCall] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [queue, setQueue] = useState([]);
+  const [tvSettings, setTvSettings] = useState(null);
+  const [currentMedia, setCurrentMedia] = useState(null);
+  
+  // For this simulation, we hardcode it to act as "TV-01". 
+  // In real life, you'd pull this from the URL (e.g. /tv/1)
+  const MY_TV_ID = 1; 
 
-  // NEW: State for live TV settings from the Admin CMS
-  const [settings, setSettings] = useState({
-    video_url: '',
-    announcement: '',
-    is_emergency: false,
-    emergency_text: ''
-  });
-
-  // Use a ref to track the previous token without triggering re-renders in the effect
-  const prevServingIdRef = useRef(null);
-
-  // --- LIVE CLOCK TICKER ---
   useEffect(() => {
-    const clockInterval = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(clockInterval);
-  }, []);
-
-  // --- DATABASE POLLING (QUEUE & SETTINGS) ---
-  useEffect(() => {
-    const fetchData = async () => {
+    const fetchTVData = async () => {
       try {
-        // 1. Fetch Patient Queue
-        const queueResponse = await fetch('https://mahatme-backend.onrender.com/api/patients');
-        if (queueResponse.ok) {
-          const data = await queueResponse.json();
+        // 1. Fetch Queue
+        const qRes = await fetch('https://mahatme-backend.onrender.com/api/patients');
+        if (qRes.ok) {
+          const rawQueue = await qRes.json();
+          // Sort: 'Serving' at top, then by time. Filter out 'Done'
+          const activeQueue = rawQueue
+            .filter(p => p.status !== 'Done')
+            .sort((a, b) => (a.status === 'Serving' ? -1 : 1));
+          setQueue(activeQueue);
+        }
+
+        // 2. Fetch Base TV Settings & Ticker
+        const tvRes = await fetch('https://mahatme-backend.onrender.com/api/settings');
+        if (tvRes.ok) {
+          const allTvs = await tvRes.json();
+          const myTv = allTvs.find(tv => tv.id === MY_TV_ID) || allTvs[0];
+          setTvSettings(myTv);
+        }
+
+        // 3. Fetch Schedules & Check Current Time
+        const schedRes = await fetch('https://mahatme-backend.onrender.com/api/schedules');
+        if (schedRes.ok) {
+          const allSchedules = await schedRes.json();
+          const mySchedules = allSchedules.filter(s => s.tv_id === MY_TV_ID);
           
-          const serving = data.find(p => p.status === 'Serving') || null;
-          const waiting = data.filter(p => p.status === 'Waiting').slice(0, 4);
-
-          // Trigger flash animation ONLY if the serving ID has actually changed
-          if (serving && serving.id !== prevServingIdRef.current) {
-            if (prevServingIdRef.current !== null) { 
-              setIsNewCall(true);
-              setTimeout(() => setIsNewCall(false), 5000);
-            }
-            prevServingIdRef.current = serving.id; 
-          } else if (!serving) {
-            prevServingIdRef.current = null; 
-          }
-
-          setServingToken(serving);
-          setWaitingTokens(waiting);
-        }
-
-        // 2. Fetch Live TV Settings (CMS & Emergency)
-        const settingsResponse = await fetch('https://mahatme-backend.onrender.com/api/settings');
-        if (settingsResponse.ok) {
-          const settingsData = await settingsResponse.json();
-          if (settingsData) {
-            setSettings(settingsData);
+          // Get current time in HH:MM format to check against schedule
+          const now = new Date();
+          const currentTime = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+          
+          const activeSchedule = mySchedules.find(s => currentTime >= s.start_time && currentTime <= s.end_time);
+          
+          if (activeSchedule) {
+            setCurrentMedia({ type: activeSchedule.type, url: activeSchedule.url });
+          } else {
+            // Fallback if no schedule active: You can put a default hospital logo URL here
+            setCurrentMedia({ type: 'image', url: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=800&q=80' });
           }
         }
-
-      } catch (error) {
-        console.error("Sync Error:", error);
-      }
+      } catch (error) { console.error("TV Refresh Failed", error); }
     };
 
-    fetchData(); // Initial fetch
-    const pollInterval = setInterval(fetchData, 2000); // Poll every 2 seconds
+    fetchTVData();
+    const interval = setInterval(fetchTVData, 3000); // Super fast refresh for queue live feel!
+    return () => clearInterval(interval);
+  }, []);
 
-    return () => clearInterval(pollInterval); 
-  }, []); 
+  if (!tvSettings) return <div style={{ backgroundColor: 'black', color: 'white', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><h2>INITIALIZING TV-0{MY_TV_ID}...</h2></div>;
+
+  // EMERGENCY OVERRIDE
+  if (tvSettings.is_emergency) {
+    return (
+      <div style={{ backgroundColor: '#cc0000', color: 'white', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '50px' }}>
+        <h1 style={{ fontSize: '5rem', margin: '0 0 20px 0', animation: 'blink 1s infinite' }}>🚨 EMERGENCY ALERT 🚨</h1>
+        <h2 style={{ fontSize: '3rem' }}>{tvSettings.emergency_text}</h2>
+      </div>
+    );
+  }
 
   return (
-    <div className="tv-container">
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: '#f4f7f6', overflow: 'hidden' }}>
       
-      {/* 🚨 EMERGENCY OVERRIDE SCREEN 🚨 */}
-      {settings.is_emergency && (
-        <div style={{
-          position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-          backgroundColor: '#dc3545', zIndex: 9999, display: 'flex', flexDirection: 'column',
-          justifyContent: 'center', alignItems: 'center', color: 'white', textAlign: 'center'
-        }} className="flash-active">
-          <h1 style={{ fontSize: '150px', margin: '0 0 20px 0', textShadow: '4px 4px 10px rgba(0,0,0,0.5)' }}>🚨 EMERGENCY 🚨</h1>
-          <h2 style={{ fontSize: '60px', padding: '0 50px' }}>{settings.emergency_text}</h2>
+      {/* HEADER */}
+      <header style={{ backgroundColor: '#003366', color: 'white', padding: '15px 30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', zIndex: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <h1 style={{ margin: 0, fontSize: '28px', letterSpacing: '1px' }}>Mahatme Eye Hospital</h1>
+          <span style={{ backgroundColor: '#0055a4', padding: '5px 10px', borderRadius: '4px', fontSize: '14px', fontWeight: 'bold' }}>{tvSettings.tv_name}</span>
         </div>
-      )}
+        <h2 style={{ margin: 0, fontSize: '24px' }}>{new Date().toLocaleTimeString()}</h2>
+      </header>
 
-      {/* Floating Header Overlay for Clock */}
-      <div className="tv-header-bar">
-        <div className="tv-brand"></div>
-        <div className="tv-clock">
-          {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-        </div>
-      </div>
-
-      <div className="tv-main">
-        {/* ZONE A: CMS / Health Video Loop */}
-        <div className="zone-a">
-          <iframe 
-            // Fallback to default video if Admin clears the database link
-            src={settings.video_url || "https://www.youtube.com/embed/jfKfPfyJRdk?autoplay=1&mute=1&loop=1&playlist=jfKfPfyJRdk&controls=0"} 
-            title="Hospital Information"
-            allow="autoplay; encrypted-media"
-            style={{ pointerEvents: 'none' }} 
-          ></iframe>
+      {/* MAIN SPLIT SCREEN */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        
+        {/* LEFT SIDE: MEDIA PLAYER (60%) */}
+        <div style={{ flex: '6', backgroundColor: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {currentMedia?.type === 'video' ? (
+             <iframe src={currentMedia.url} title="Content" style={{ width: '100%', height: '100%', border: 'none' }}></iframe>
+          ) : (
+             <img src={currentMedia?.url} alt="Content" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          )}
         </div>
 
-        {/* ZONE B: Live Token Ticker */}
-        <div className={`zone-b ${isNewCall ? 'flash-active' : ''}`}>
-          <div className="token-header">
-            MAHATME OPD
+        {/* RIGHT SIDE: LIVE QUEUE TABLE (40%) */}
+        <div style={{ flex: '4', display: 'flex', flexDirection: 'column', backgroundColor: 'white', borderLeft: '4px solid #003366' }}>
+          <div style={{ backgroundColor: '#eef2f6', padding: '15px', textAlign: 'center', borderBottom: '2px solid #ccc' }}>
+            <h2 style={{ margin: 0, color: '#003366', fontSize: '26px' }}>LIVE PATIENT QUEUE</h2>
           </div>
           
-          <div className="now-serving-box">
-            <div className="now-serving-text">NOW SERVING</div>
-            <h1 className="big-token">
-              {servingToken ? servingToken.token : '---'}
-            </h1>
-            <div className="patient-name">
-              {servingToken ? servingToken.name : 'Please Wait'}
-            </div>
-          </div>
-
-          <div className="waiting-list">
-            <h3>NEXT IN LINE</h3>
-            <p style={{ fontSize: '24px', margin: 0, fontWeight: 'bold' }}>
-              {waitingTokens.length > 0 
-                ? waitingTokens.map(p => p.token).join(', ') 
-                : 'Queue is clear'}
-            </p>
+          <div style={{ flex: 1, overflow: 'hidden', padding: '15px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '20px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#0055a4', color: 'white', textAlign: 'left' }}>
+                  <th style={{ padding: '12px', borderTopLeftRadius: '8px' }}>Token</th>
+                  <th style={{ padding: '12px' }}>Name</th>
+                  <th style={{ padding: '12px', borderTopRightRadius: '8px' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {queue.length === 0 ? (
+                  <tr><td colSpan="3" style={{ textAlign: 'center', padding: '30px', color: '#666' }}>No patients waiting.</td></tr>
+                ) : (
+                  queue.map((patient, index) => (
+                    <tr key={patient.id} style={{ 
+                        borderBottom: '1px solid #eee', 
+                        backgroundColor: patient.status === 'Serving' ? '#e6ffe6' : (index % 2 === 0 ? '#fafafa' : 'white'),
+                        transition: 'all 0.5s ease-in-out' // Smooth shifting animation
+                      }}>
+                      <td style={{ padding: '15px', fontWeight: 'bold', color: patient.status === 'Serving' ? 'green' : '#333', fontSize: '24px' }}>{patient.token}</td>
+                      <td style={{ padding: '15px', fontWeight: patient.status === 'Serving' ? 'bold' : 'normal' }}>{patient.name}</td>
+                      <td style={{ padding: '15px' }}>
+                        {patient.status === 'Serving' ? (
+                           <span style={{ backgroundColor: 'green', color: 'white', padding: '5px 10px', borderRadius: '20px', fontSize: '16px', fontWeight: 'bold', animation: 'pulse 1.5s infinite' }}>CALLING</span>
+                        ) : (
+                           <span style={{ color: '#666', fontSize: '18px' }}>Waiting</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
 
-      {/* ZONE C: Modern Scrolling Announcements */}
-      <div className="zone-c">
-        <div className="ticker-text">
-          {settings.announcement || "Welcome to Mahatme Eye Hospital."}
+      {/* FOOTER TICKER */}
+      <footer style={{ backgroundColor: '#dc3545', color: 'white', padding: '10px 0', fontSize: '24px', fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', zIndex: 10 }}>
+        <div style={{ display: 'inline-block', paddingLeft: '100%', animation: 'scrollTicker 20s linear infinite' }}>
+          {tvSettings.announcement || "Welcome to Mahatme Eye Hospital."}
         </div>
-      </div>
+      </footer>
+
+      {/* INLINE ANIMATIONS */}
+      <style>
+        {`
+          @keyframes scrollTicker { 0% { transform: translate(0, 0); } 100% { transform: translate(-100%, 0); } }
+          @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+          @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 1; } }
+        `}
+      </style>
     </div>
   );
 }

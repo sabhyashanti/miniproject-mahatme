@@ -203,7 +203,76 @@ app.put('/api/settings', async (req, res) => {
     res.status(500).json({ error: 'Failed to update settings' });
   }
 });
+// ==========================================
+// --- MEDIA LIBRARY & SCHEDULING SYSTEM ---
+// ==========================================
 
+// 1. Upload to Media Library
+app.post('/api/media', async (req, res) => {
+  const { title, type, url } = req.body;
+  try {
+    const result = await pool.query(
+      "INSERT INTO media_library (title, type, url) VALUES ($1, $2, $3) RETURNING *",
+      [title, type, url]
+    );
+    res.status(201).json({ message: 'Media saved to library!', media: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to save media.' });
+  }
+});
+
+// 2. Fetch Media Library
+app.get('/api/media', async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM media_library ORDER BY id DESC");
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch media library.' });
+  }
+});
+
+// 3. Create a Schedule for a TV
+app.post('/api/schedules', async (req, res) => {
+  const { tv_id, media_id, start_time, end_time } = req.body;
+  try {
+    const result = await pool.query(
+      "INSERT INTO schedules (tv_id, media_id, start_time, end_time) VALUES ($1, $2, $3, $4) RETURNING *",
+      [tv_id, media_id, start_time, end_time]
+    );
+    res.status(201).json({ message: 'Schedule created!', schedule: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create schedule.' });
+  }
+});
+
+// 4. Fetch All Schedules (Joined with Media data)
+app.get('/api/schedules', async (req, res) => {
+  try {
+    const query = `
+      SELECT s.id, s.tv_id, s.start_time, s.end_time, m.title, m.type, m.url 
+      FROM schedules s
+      JOIN media_library m ON s.media_id = m.id
+      ORDER BY s.start_time ASC
+    `;
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch schedules.' });
+  }
+});
+
+// 5. Delete a Schedule
+app.delete('/api/schedules/:id', async (req, res) => {
+  try {
+    await pool.query("DELETE FROM schedules WHERE id = $1", [req.params.id]);
+    res.json({ message: 'Schedule removed.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete schedule.' });
+  }
+});
 // --- START SERVER ---
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
