@@ -56,8 +56,11 @@ function AdminDashboard() {
     }
   };
 
+  // --- AUTO-REFRESH LIVE DATA ---
   useEffect(() => {
     fetchData();
+    const interval = setInterval(fetchData, 5000); // Syncs the dashboard every 5 seconds
+    return () => clearInterval(interval);
   }, [activeTab]);
 
   const toggleStat = (statName) => {

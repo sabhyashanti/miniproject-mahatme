@@ -77,6 +77,9 @@ function TVSimulation() {
     .sort((a, b) => (a.status === 'Serving' ? -1 : b.status === 'Serving' ? 1 : 0))
     .slice(0, 5); // TOP 5 ONLY
 
+  // --- NEW: Calculate exactly how many people are waiting in this department ---
+  const totalWaiting = queue.filter(p => p.department === currentDept && p.status === 'Waiting').length;
+
   // --- COLOR THEMES FOR TV ---
   const deptColors = {
     'OPD-1': '#1565c0', 'OPD-2': '#00695c', 'OPD-3': '#ef6c00',
@@ -118,8 +121,13 @@ function TVSimulation() {
 
         {/* RIGHT: 15-SECOND LOOPING QUEUE */}
         <div className="tv-queue-section">
-          <div className="queue-header" style={{ backgroundColor: deptColors[currentDept] }}>
-            {currentDept}
+          
+          {/* --- UPDATED HEADER WITH ACTIVE COUNTER --- */}
+          <div className="queue-header" style={{ backgroundColor: deptColors[currentDept], display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 40px' }}>
+            <span>{currentDept} Queue</span>
+            <span style={{ fontSize: '24px', backgroundColor: 'rgba(0,0,0,0.4)', padding: '10px 20px', borderRadius: '10px', border: '2px solid rgba(255,255,255,0.3)', fontWeight: 'bold' }}>
+              {totalWaiting} Waiting
+            </span>
           </div>
           
           <table className="queue-table">
