@@ -86,6 +86,18 @@ function ReceptionistDashboard() {
     else alert(`The ${department} queue is currently empty.`);
   };
 
+  // --- NEW: SKIP & REQUEUE LOGIC ---
+  const handleSkipPatient = async (patientId, department) => {
+    try {
+      // 1. Tell the backend to bump them down the line
+      await fetch(`https://mahatme-backend.onrender.com/api/patients/skip/${patientId}`, { method: 'PUT' });
+      // 2. Immediately call the ACTUAL next person in line
+      await handleReceptionistCallNext(department);
+    } catch (error) {
+      alert("Error skipping patient.");
+    }
+  };
+
   const availableDoctors = doctors.filter(doc => doc.department === patientForm.department);
   const departments = ['OPD-1', 'OPD-2', 'OPD-3', 'OPD-4', 'OT-1', 'OT-2'];
 
@@ -188,6 +200,7 @@ function ReceptionistDashboard() {
                   <th style={{ padding: '12px' }}>Date</th>
                   <th>Time</th>
                   <th>Patient Name</th>
+                  <th>Phone Number</th> {/* ADDED */}
                   <th>Department</th>
                   <th>Assigned Doctor</th>
                   <th>Action</th>
@@ -195,13 +208,14 @@ function ReceptionistDashboard() {
               </thead>
               <tbody>
                 {historyList.filter(p => p.visit_type === 'Appointment' && !p.is_active).length === 0 ? (
-                  <tr><td colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>No pending appointments.</td></tr>
+                  <tr><td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>No pending appointments.</td></tr>
                 ) : (
                   historyList.filter(p => p.visit_type === 'Appointment' && !p.is_active).map(p => (
                     <tr key={p.id} style={{ borderBottom: '1px solid #ddd' }}>
                       <td style={{ padding: '12px' }}>{p.appointment_date ? new Date(p.appointment_date).toLocaleDateString() : 'N/A'}</td>
                       <td style={{ fontWeight: 'bold' }}>{p.appointment_time}</td>
                       <td>{p.name}</td>
+                      <td>{p.phone}</td> {/* ADDED */}
                       <td><span style={{ backgroundColor: '#eee', padding: '4px 8px', borderRadius: '4px' }}>{p.department}</span></td>
                       <td>{p.assigned_doctor !== 'Any' ? `Dr. ${p.assigned_doctor}` : 'Any'}</td>
                       <td>
@@ -241,7 +255,7 @@ function ReceptionistDashboard() {
                     <h2 style={{ margin: 0, fontSize: '20px' }}>{dep} Active Queue</h2>
                     <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
                       <span style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: '5px 10px', borderRadius: '15px', fontWeight: 'bold' }}>
-                        {depPatients.length} Waiting
+                        {depPatients.filter(p => p.status === 'Waiting').length} Waiting
                       </span>
                       <button onClick={() => handleReceptionistCallNext(dep)} style={{ backgroundColor: 'white', color: theme.header, border: 'none', padding: '8px 15px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>
                         🔊 Call Next
@@ -273,7 +287,13 @@ function ReceptionistDashboard() {
                               <td>{p.visit_type === 'Walk-in' ? '🚶 Walk-in' : `📅 ${p.appointment_time}`}</td>
                               <td>
                                 {p.status === 'Serving' ? (
-                                  <span style={{ backgroundColor: '#28a745', color: 'white', padding: '4px 10px', borderRadius: '12px', fontWeight: 'bold', fontSize: '12px' }}>● SERVING</span>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span style={{ backgroundColor: '#28a745', color: 'white', padding: '4px 10px', borderRadius: '12px', fontWeight: 'bold', fontSize: '12px' }}>● SERVING</span>
+                                    {/* ADDED: The Skip Button */}
+                                    <button onClick={() => handleSkipPatient(p.id, p.department)} style={{ backgroundColor: '#ffc107', color: '#333', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                                      🚫 Skip (Unavailable)
+                                    </button>
+                                  </div>
                                 ) : (
                                   <span style={{ color: '#666', fontWeight: 'bold' }}>Waiting</span>
                                 )}
@@ -303,19 +323,21 @@ function ReceptionistDashboard() {
                   <th>Date Recorded</th>
                   <th>Token History</th>
                   <th>Patient Name</th>
+                  <th>Phone Number</th> {/* ADDED */}
                   <th>Department</th>
                   <th>Doctor Seen</th>
                 </tr>
               </thead>
               <tbody>
                 {historyList.filter(p => p.status === 'Done' || p.visit_type === 'Walk-in').length === 0 ? (
-                  <tr><td colSpan="5" style={{ textAlign: 'center', padding: '20px' }}>No history records found.</td></tr>
+                  <tr><td colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>No history records found.</td></tr>
                 ) : (
                   historyList.filter(p => p.status === 'Done' || (p.visit_type === 'Walk-in' && !p.is_active)).map(p => (
                     <tr key={p.id}>
                       <td>{new Date(p.created_at).toLocaleDateString()}</td>
                       <td>{p.token}</td>
                       <td style={{ fontWeight: 'bold' }}>{p.name}</td>
+                      <td>{p.phone}</td> {/* ADDED */}
                       <td>{p.department}</td>
                       <td>{p.assigned_doctor || 'N/A'}</td>
                     </tr>

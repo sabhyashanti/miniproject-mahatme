@@ -179,6 +179,24 @@ app.put('/api/patients/next', async (req, res) => {
     res.status(500).json({ error: 'Rotation failed' }); 
   }
 });
+// 6. SKIP / REQUEUE UNAVAILABLE PATIENT
+app.put('/api/patients/skip/:id', async (req, res) => {
+  try {
+    // Reverts status to 'Waiting' and adds 15 minutes to their timestamps to bump them down the line
+    await pool.query(
+      `UPDATE patients 
+       SET status = 'Waiting', 
+           created_at = created_at + interval '15 minutes',
+           appointment_time = CASE WHEN appointment_time IS NOT NULL THEN (appointment_time::time + interval '15 minutes')::time ELSE NULL END
+       WHERE id = $1`,
+      [req.params.id]
+    );
+    res.json({ message: 'Patient bumped down the queue.' });
+  } catch (err) { 
+    console.error(err);
+    res.status(500).json({ error: 'Failed to skip patient' }); 
+  }
+});
 
 // ==========================================
 // --- SETTINGS & MEDIA ---
