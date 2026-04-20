@@ -4,7 +4,8 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 // Import our pages
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
-import StaffPortal from './pages/StaffPortal';
+import ReceptionistDashboard from './pages/ReceptionistDashboard';
+import DoctorDashboard from './pages/DoctorDashboard';
 import TVSimulation from './display/TVSimulation';
 
 function App() {
@@ -16,7 +17,8 @@ function App() {
         
         {/* Secure Zones */}
         <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/staff" element={<StaffPortal />} />
+        <Route path="/receptionist" element={<ReceptionistDashboard />} />
+        <Route path="/doctor" element={<DoctorDashboard />} />
         
         {/* Physical Output Simulation */}
         <Route path="/display" element={<TVSimulation />} />

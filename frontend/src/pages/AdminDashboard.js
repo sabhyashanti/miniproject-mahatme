@@ -17,8 +17,8 @@ function AdminDashboard() {
   // --- REAL-TIME CLOCK STATE (The Heartbeat) ---
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // --- FORM STATES ---
-  const [newUser, setNewUser] = useState({ username: '', email: '', role: 'receptionist' });
+  // --- FORM STATES (Updated with Department for Staff Registration) ---
+  const [newUser, setNewUser] = useState({ username: '', email: '', role: 'receptionist', department: 'General' });
   const [cmsInput, setCmsInput] = useState({ targetTV: 'all', text: '' }); 
   const [emergencyInput, setEmergencyInput] = useState('');
   const [newMedia, setNewMedia] = useState({ title: '', type: 'image', url: '' });
@@ -168,8 +168,8 @@ function AdminDashboard() {
       });
       const data = await response.json();
       if (response.ok) {
-        alert(`Successfully registered ${newUser.username}`);
-        setNewUser({ username: '', email: '', role: 'receptionist' }); 
+        alert(`Successfully registered ${newUser.username} in ${newUser.department}`);
+        setNewUser({ username: '', email: '', role: 'receptionist', department: 'General' }); // Reset with dept
       } else alert(data.error);
     } catch (error) { alert("Error connecting to the server."); }
   };
@@ -464,6 +464,20 @@ function AdminDashboard() {
             <form className="auth-form" onSubmit={handleAdminSignup}>
               <div className="form-group"><label>Username</label><input type="text" className="auth-input" value={newUser.username} onChange={(e) => setNewUser({...newUser, username: e.target.value})} required /></div>
               <div className="form-group"><label>Staff Email Address</label><input type="email" className="auth-input" value={newUser.email} onChange={(e) => setNewUser({...newUser, email: e.target.value})} required /></div>
+              
+              <div className="form-group">
+                <label>Assign Department</label>
+                <select className="auth-select" value={newUser.department} onChange={(e) => setNewUser({...newUser, department: e.target.value})}>
+                  <option value="General">General / Reception</option>
+                  <option value="OPD-1">OPD-1 (General Eye Care)</option>
+                  <option value="OPD-2">OPD-2 (Retina)</option>
+                  <option value="OPD-3">OPD-3 (Cataract)</option>
+                  <option value="OPD-4">OPD-4 (Glaucoma)</option>
+                  <option value="OT-1">OT-1 (Major Surgery)</option>
+                  <option value="OT-2">OT-2 (Minor Surgery)</option>
+                </select>
+              </div>
+
               <div className="form-group">
                 <label>Assign Role</label>
                 <select className="auth-select" value={newUser.role} onChange={(e) => setNewUser({...newUser, role: e.target.value})}>

@@ -13,20 +13,19 @@ if (!process.env.DATABASE_URL || process.env.DATABASE_URL.includes('your_neon_co
     console.error("❌ ERROR: You need to paste your actual Neon Database URL into the .env file!");
 }
 
-// 2. Connect to Postgres (With Neon's required SSL config)
+// 2. Connect to Postgres
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false } // Crucial for Neon.tech connections
+  ssl: { rejectUnauthorized: false } 
 });
 
-// 3. Test Database Connection Immediately on Startup
 pool.connect()
   .then(client => {
       console.log("✅ Successfully connected to the Neon PostgreSQL Database!");
       client.release();
   })
   .catch(err => {
-      console.error("❌ Database connection failed. Check your connection string:", err.message);
+      console.error("❌ Database connection failed:", err.message);
   });
 
 // --- EMAIL TRANSPORTER SETUP ---
@@ -38,17 +37,19 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// --- OTP MEMORY STORE ---
 const otpStore = new Map();
 
-// --- SIGNUP ENDPOINT (Updated for Email) ---
+// ==========================================
+// --- USER & AUTHENTICATION ENDPOINTS ---
+// ==========================================
+
+// --- SIGNUP ENDPOINT (Updated to include Department for Doctors) ---
 app.post('/api/signup', async (req, res) => {
-  const { username, email, role } = req.body;
+  const { username, email, role, department } = req.body;
   try {
-    // Insert a dummy password to satisfy the DB NOT NULL constraint while using OTP
     const result = await pool.query(
-      "INSERT INTO users (username, password, role, email) VALUES ($1, 'dummy_pass_otp_used', $2, $3) RETURNING id, username, role",
-      [username, role, email]
+      "INSERT INTO users (username, password, role, email, department) VALUES ($1, 'dummy_pass_otp_used', $2, $3, $4) RETURNING id, username, role, department",
+      [username, role, email, department || 'General']
     );
     res.status(201).json({ message: 'User created successfully!', user: result.rows[0] });
   } catch (err) {
@@ -57,21 +58,28 @@ app.post('/api/signup', async (req, res) => {
   }
 });
 
-// --- REQUEST OTP ENDPOINT ---
+// --- NEW: FETCH DOCTORS ENDPOINT ---
+app.get('/api/doctors', async (req, res) => {
+  try {
+    const result = await pool.query("SELECT id, username, department FROM users WHERE role = 'doctor'");
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch doctors' });
+  }
+});
+
+// --- REQUEST OTP ---
 app.post('/api/request-otp', async (req, res) => {
   const { email } = req.body;
   try {
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Email not registered in the system.' });
 
-    // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    otpStore.set(email, { otp, expires: Date.now() + 300000 }); // Expires in 5 mins
+    otpStore.set(email, { otp, expires: Date.now() + 300000 }); 
 
-    // Fallback: Always print OTP to backend terminal (Safety net for presentations)
     console.log(`\n🔑 OTP for ${email}: ${otp}\n`);
 
-    // Send Email
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: email,
@@ -88,7 +96,7 @@ app.post('/api/request-otp', async (req, res) => {
   }
 });
 
-// --- VERIFY OTP ENDPOINT ---
+// --- VERIFY OTP ---
 app.post('/api/verify-otp', async (req, res) => {
   const { email, otp } = req.body;
   try {
@@ -100,35 +108,45 @@ app.post('/api/verify-otp', async (req, res) => {
     }
     if (storedData.otp !== otp) return res.status(400).json({ error: 'Invalid OTP.' });
 
-    // OTP is correct! Fetch user
-    const result = await pool.query('SELECT username, role FROM users WHERE email = $1', [email]);
-    otpStore.delete(email); // Clear OTP so it cannot be reused
-    res.json({ message: 'Login successful', role: result.rows[0].role, username: result.rows[0].username });
+    const result = await pool.query('SELECT username, role, department FROM users WHERE email = $1', [email]);
+    otpStore.delete(email); 
+    res.json({ message: 'Login successful', role: result.rows[0].role, username: result.rows[0].username, department: result.rows[0].department });
   } catch (err) {
     res.status(500).json({ error: 'Server error verifying OTP.' });
   }
 });
 
-// --- ADD NEW PATIENT ENDPOINT ---
+// ==========================================
+// --- PATIENT & QUEUE ENDPOINTS ---
+// ==========================================
+
+// --- ADD NEW PATIENT (STRICT VALIDATIONS + DEPARTMENT LOGIC) ---
 app.post('/api/patients', async (req, res) => {
-  const { token, name, aadhaar, phone, address } = req.body;
+  const { token, name, aadhaar, phone, address, department, assigned_doctor, visit_type, appointment_time } = req.body;
+  
+  // 🚨 STRICT BACKEND DATA VALIDATION
+  if (!/^[a-zA-Z\s]+$/.test(name)) return res.status(400).json({ error: 'Name must contain only letters and spaces.' });
+  if (!/^\d{10}$/.test(phone)) return res.status(400).json({ error: 'Phone must be exactly 10 digits.' });
+  if (!/^\d{12}$/.test(aadhaar)) return res.status(400).json({ error: 'ID must be exactly 12 digits.' });
+
   try {
     const result = await pool.query(
-      'INSERT INTO patients (token, name, aadhaar, phone, address, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [token, name, aadhaar, phone, address, 'Waiting']
+      `INSERT INTO patients (token, name, aadhaar, phone, address, status, department, assigned_doctor, visit_type, appointment_time) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [token, name, aadhaar, phone, address, 'Waiting', department || 'OPD-1', assigned_doctor || null, visit_type || 'Walk-in', appointment_time || null]
     );
     res.status(201).json({ message: 'Patient registered successfully!', patient: result.rows[0] });
   } catch (err) {
-    if (err.code === '23505') res.status(400).json({ error: 'This Aadhaar number is already registered today.' });
+    if (err.code === '23505') res.status(400).json({ error: 'This ID number is already registered today.' });
     else res.status(500).json({ error: 'Database error while saving patient.' });
   }
 });
 
-// --- GET LIVE QUEUE ENDPOINT (For TV Display) ---
+// --- GET LIVE QUEUE (Sorted properly for Walk-ins vs Appointments) ---
 app.get('/api/patients', async (req, res) => {
   try {
-    // Fetch all patients for today, ordered by when they were added
-    const result = await pool.query("SELECT * FROM patients WHERE status IN ('Waiting', 'Serving') ORDER BY created_at ASC");
+    // Orders "Serving" first, then sorts Appointments by their scheduled time, then Walk-ins by arrival time
+    const result = await pool.query("SELECT * FROM patients WHERE status IN ('Waiting', 'Serving') ORDER BY status DESC, appointment_time ASC NULLS LAST, created_at ASC");
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -137,21 +155,39 @@ app.get('/api/patients', async (req, res) => {
 });
 
 // --- UPDATE QUEUE (DOCTOR CALLS NEXT PATIENT) ---
+// Now supports filtering so a Doctor only calls the next patient in THEIR specific department
 app.put('/api/patients/next', async (req, res) => {
+  const { department, doctor_name } = req.body; // Can be passed by the Doctor Dashboard
+  
   try {
-    console.log("--> [QUEUE] Doctor requested next patient...");
-
-    // 1. Mark the currently 'Serving' patient as 'Done'
-    const doneResult = await pool.query("UPDATE patients SET status = 'Done' WHERE status = 'Serving' RETURNING id");
-    console.log(`    - Marked ${doneResult.rowCount} patient(s) as Done.`);
+    // 1. Mark the currently 'Serving' patient as 'Done' (filtered by dept if provided)
+    let doneQuery = "UPDATE patients SET status = 'Done' WHERE status = 'Serving'";
+    let queryParams = [];
+    if (department) {
+      doneQuery += " AND department = $1";
+      queryParams.push(department);
+    }
+    await pool.query(doneQuery, queryParams);
     
-    // 2. Safely find the oldest 'Waiting' patient
-    const nextPatient = await pool.query("SELECT id FROM patients WHERE status = 'Waiting' ORDER BY created_at ASC LIMIT 1");
+    // 2. Find the oldest 'Waiting' patient (prioritizing appointments whose time has come, then walk-ins)
+    let nextQuery = "SELECT id FROM patients WHERE status = 'Waiting'";
+    let nextParams = [];
     
-    // If no one is waiting, tell the frontend the queue is empty
+    if (department) {
+      nextQuery += " AND department = $1";
+      nextParams.push(department);
+    }
+    if (doctor_name) {
+      nextQuery += ` AND (assigned_doctor = $${nextParams.length + 1} OR assigned_doctor IS NULL OR assigned_doctor = '')`;
+      nextParams.push(doctor_name);
+    }
+    
+    nextQuery += " ORDER BY appointment_time ASC NULLS LAST, created_at ASC LIMIT 1";
+    
+    const nextPatient = await pool.query(nextQuery, nextParams);
+    
     if (nextPatient.rows.length === 0) {
-        console.log("    - No waiting patients found in database.");
-        return res.json({ message: 'Queue is already empty', serving: null });
+        return res.json({ message: 'Queue is already empty for this department.', serving: null });
     }
 
     // 3. Upgrade that specific patient to 'Serving'
@@ -160,38 +196,35 @@ app.put('/api/patients/next', async (req, res) => {
       [nextPatient.rows[0].id]
     );
     
-    console.log(`    - Upgraded Token ${result.rows[0].token} to Serving!`);
     res.json({ message: 'Queue updated successfully!', serving: result.rows[0] });
-
   } catch (err) {
     console.error("❌ ERROR updating queue:", err.message);
     res.status(500).json({ error: 'Database failed to update the queue.' });
   }
 });
 
-// --- GET ALL SYSTEM SETTINGS (For Admin & TVs) ---
+// ==========================================
+// --- DIGITAL SIGNAGE (TV) SETTINGS ---
+// ==========================================
+
 app.get('/api/settings', async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM system_settings ORDER BY id ASC");
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Failed to fetch settings' });
   }
 });
 
-// --- UPDATE SYSTEM SETTINGS (Individual or All TVs) ---
 app.put('/api/settings', async (req, res) => {
   const { tv_id, video_url, announcement, is_emergency, emergency_text } = req.body;
   try {
     if (tv_id === 'all') {
-      // Update ALL TVs in the hospital
       await pool.query(
         "UPDATE system_settings SET video_url = COALESCE($1, video_url), announcement = COALESCE($2, announcement), is_emergency = COALESCE($3, is_emergency), emergency_text = COALESCE($4, emergency_text)",
         [video_url, announcement, is_emergency, emergency_text]
       );
     } else {
-      // Update a SPECIFIC TV
       await pool.query(
         "UPDATE system_settings SET video_url = COALESCE($1, video_url), announcement = COALESCE($2, announcement), is_emergency = COALESCE($3, is_emergency), emergency_text = COALESCE($4, emergency_text) WHERE id = $5",
         [video_url, announcement, is_emergency, emergency_text, tv_id]
@@ -199,30 +232,24 @@ app.put('/api/settings', async (req, res) => {
     }
     res.json({ message: 'System updated successfully!' });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Failed to update settings' });
   }
 });
+
 // ==========================================
 // --- MEDIA LIBRARY & SCHEDULING SYSTEM ---
 // ==========================================
 
-// 1. Upload to Media Library
 app.post('/api/media', async (req, res) => {
   const { title, type, url } = req.body;
   try {
-    const result = await pool.query(
-      "INSERT INTO media_library (title, type, url) VALUES ($1, $2, $3) RETURNING *",
-      [title, type, url]
-    );
-    res.status(201).json({ message: 'Media saved to library!', media: result.rows[0] });
+    const result = await pool.query("INSERT INTO media_library (title, type, url) VALUES ($1, $2, $3) RETURNING *", [title, type, url]);
+    res.status(201).json({ message: 'Media saved!', media: result.rows[0] });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Failed to save media.' });
   }
 });
 
-// 2. Fetch Media Library
 app.get('/api/media', async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM media_library ORDER BY id DESC");
@@ -232,22 +259,16 @@ app.get('/api/media', async (req, res) => {
   }
 });
 
-// 3. Create a Schedule for a TV
 app.post('/api/schedules', async (req, res) => {
   const { tv_id, media_id, start_time, end_time } = req.body;
   try {
-    const result = await pool.query(
-      "INSERT INTO schedules (tv_id, media_id, start_time, end_time) VALUES ($1, $2, $3, $4) RETURNING *",
-      [tv_id, media_id, start_time, end_time]
-    );
+    const result = await pool.query("INSERT INTO schedules (tv_id, media_id, start_time, end_time) VALUES ($1, $2, $3, $4) RETURNING *", [tv_id, media_id, start_time, end_time]);
     res.status(201).json({ message: 'Schedule created!', schedule: result.rows[0] });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Failed to create schedule.' });
   }
 });
 
-// 4. Fetch All Schedules (Joined with Media data)
 app.get('/api/schedules', async (req, res) => {
   try {
     const query = `
@@ -259,12 +280,10 @@ app.get('/api/schedules', async (req, res) => {
     const result = await pool.query(query);
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Failed to fetch schedules.' });
   }
 });
 
-// 5. Delete a Schedule
 app.delete('/api/schedules/:id', async (req, res) => {
   try {
     await pool.query("DELETE FROM schedules WHERE id = $1", [req.params.id]);
@@ -273,13 +292,13 @@ app.delete('/api/schedules/:id', async (req, res) => {
     res.status(500).json({ error: 'Failed to delete schedule.' });
   }
 });
+
 // --- START SERVER ---
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
     console.log(`🚀 Server actively running and listening on port ${PORT}`);
 });
 
-// Keep server alive and catch port errors
 server.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
         console.error(`❌ ERROR: Port ${PORT} is already in use. Close other terminals and try again.`);

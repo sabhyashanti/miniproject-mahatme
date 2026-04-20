@@ -51,14 +51,18 @@ function Login() {
       const data = await response.json();
       
       if (response.ok) {
-        // Save the role (superuser, admin, doctor, or receptionist)
+        // Save ALL user details so the dashboards know how to filter data
         localStorage.setItem('userRole', data.role);
+        localStorage.setItem('userName', data.username);
+        localStorage.setItem('userDepartment', data.department || 'General');
         
-        // Route superuser & admin to the Admin Dashboard, staff to the Staff Portal
+        // Route them to their specific dashboard!
         if (data.role === 'superuser' || data.role === 'admin') {
           navigate('/admin');
-        } else {
-          navigate('/staff');
+        } else if (data.role === 'receptionist') {
+          navigate('/receptionist');
+        } else if (data.role === 'doctor') {
+          navigate('/doctor');
         }
       } else {
         alert(data.error); 
