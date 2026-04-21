@@ -1,7 +1,8 @@
 /* frontend/src/pages/AdminDashboard.css */
 .admin-container {
   display: flex;
-  min-height: 100vh;
+  height: 100vh; /* Changed from min-height to strictly height */
+  overflow: hidden; /* Stops the whole page from stretching */
   background-color: #f4f7f6;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
