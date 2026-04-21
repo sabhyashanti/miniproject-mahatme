@@ -36,11 +36,10 @@ function AdminDashboard() {
   }, []);
 
   // --- FETCH ALL DASHBOARD DATA ---
-  // --- FETCH ALL DASHBOARD DATA ---
   const fetchData = async () => {
     try {
       const urls = [
-        'https://mahatme-backend.onrender.com/api/queue',  // 🟢 CHANGED: Replaced /api/patients with /api/queue
+        'https://mahatme-backend.onrender.com/api/queue',
         'https://mahatme-backend.onrender.com/api/settings',
         'https://mahatme-backend.onrender.com/api/media',
         'https://mahatme-backend.onrender.com/api/schedules'
@@ -56,11 +55,8 @@ function AdminDashboard() {
     }
   };
 
-  // --- AUTO-REFRESH LIVE DATA ---
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 5000); // Syncs the dashboard every 5 seconds
-    return () => clearInterval(interval);
   }, [activeTab]);
 
   const toggleStat = (statName) => {
