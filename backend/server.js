@@ -111,7 +111,7 @@ app.post('/api/patients', async (req, res) => {
   if (!/^\d{12}$/.test(aadhaar)) return res.status(400).json({ error: 'ID must be 12 digits.' });
 
   try {
-    const isActive = visit_type === 'Walk-in';
+    const isActive = true;
     const result = await pool.query(
       `INSERT INTO patients (token, name, aadhaar, phone, address, status, department, assigned_doctor, visit_type, appointment_time, is_active) 
        VALUES ($1, $2, $3, $4, $5, 'Waiting', $6, $7, $8, $9, $10) RETURNING *`,
