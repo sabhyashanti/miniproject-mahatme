@@ -55,8 +55,6 @@ app.post('/api/request-otp', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     
-    // CHANGED: From 404 to 400. This prevents the browser from throwing a "Resource Not Found" 
-    // console error if the user just types the wrong email address!
     if (result.rows.length === 0) return res.status(400).json({ error: 'Email not registered in the system.' });
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -102,23 +100,28 @@ app.post('/api/verify-otp', async (req, res) => {
 // --- PATIENT & QUEUE ENDPOINTS ---
 // ==========================================
 
-// 1. ADD PATIENT
+// 1. ADD PATIENT (Fixed logic & added appointment_date)
 app.post('/api/patients', async (req, res) => {
-  const { token, name, aadhaar, phone, address, department, assigned_doctor, visit_type, appointment_time } = req.body;
+  const { token, name, aadhaar, phone, address, department, assigned_doctor, visit_type, appointment_date, appointment_time } = req.body;
   
   if (!/^[a-zA-Z\s]+$/.test(name)) return res.status(400).json({ error: 'Name must be letters only.' });
   if (!/^\d{10}$/.test(phone)) return res.status(400).json({ error: 'Phone must be 10 digits.' });
   if (!/^\d{12}$/.test(aadhaar)) return res.status(400).json({ error: 'ID must be 12 digits.' });
 
   try {
-    const isActive = true;
+    // FIX: Restored the proper check so Appointments don't skip the waiting room!
+    const isActive = visit_type === 'Walk-in';
+    
     const result = await pool.query(
-      `INSERT INTO patients (token, name, aadhaar, phone, address, status, department, assigned_doctor, visit_type, appointment_time, is_active) 
-       VALUES ($1, $2, $3, $4, $5, 'Waiting', $6, $7, $8, $9, $10) RETURNING *`,
-      [token, name, aadhaar, phone, address, department || 'OPD-1', assigned_doctor || null, visit_type || 'Walk-in', appointment_time || null, isActive]
+      `INSERT INTO patients (token, name, aadhaar, phone, address, status, department, assigned_doctor, visit_type, appointment_date, appointment_time, is_active) 
+       VALUES ($1, $2, $3, $4, $5, 'Waiting', $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [token, name, aadhaar, phone, address, department || 'OPD-1', assigned_doctor || null, visit_type || 'Walk-in', appointment_date || null, appointment_time || null, isActive]
     );
     res.status(201).json(result.rows[0]);
-  } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  } catch (err) { 
+    console.error(err);
+    res.status(500).json({ error: 'Database error' }); 
+  }
 });
 
 // 2. GET ACTIVE QUEUE
@@ -131,7 +134,7 @@ app.get('/api/queue', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Failed to fetch active queue' }); }
 });
 
-// 3. GET GENERAL HISTORY
+// 3. GET GENERAL HISTORY & APPOINTMENTS
 app.get('/api/patients/history', async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM patients WHERE is_active = false ORDER BY created_at DESC");
@@ -151,10 +154,8 @@ app.patch('/api/patients/activate/:id', async (req, res) => {
 app.put('/api/patients/next', async (req, res) => {
   const { department, doctor_name } = req.body;
   try {
-    // 1. Mark serving as done and inactive
     await pool.query("UPDATE patients SET status = 'Done', is_active = false WHERE status = 'Serving' AND department = $1", [department]);
     
-    // 2. Promote next in line (Added safety check so it doesn't crash if queue is empty)
     let nextQuery = `UPDATE patients SET status = 'Serving' 
                      WHERE id = (SELECT id FROM patients WHERE status = 'Waiting' AND is_active = true AND department = $1`;
     let nextParams = [department];
@@ -168,7 +169,6 @@ app.put('/api/patients/next', async (req, res) => {
     
     const next = await pool.query(nextQuery, nextParams);
 
-    // SAFETY CHECK: If no one is waiting, don't crash! Just tell the frontend.
     if (next.rows.length === 0) {
       return res.json({ message: 'Queue is already empty for this department.', serving: null });
     }
@@ -179,10 +179,10 @@ app.put('/api/patients/next', async (req, res) => {
     res.status(500).json({ error: 'Rotation failed' }); 
   }
 });
+
 // 6. SKIP / REQUEUE UNAVAILABLE PATIENT
 app.put('/api/patients/skip/:id', async (req, res) => {
   try {
-    // Reverts status to 'Waiting' and adds 15 minutes to their timestamps to bump them down the line
     await pool.query(
       `UPDATE patients 
        SET status = 'Waiting', 
@@ -195,6 +195,17 @@ app.put('/api/patients/skip/:id', async (req, res) => {
   } catch (err) { 
     console.error(err);
     res.status(500).json({ error: 'Failed to skip patient' }); 
+  }
+});
+
+// 7. DELETE PATIENT (No-show / Cancel Appointment) - NEW!
+app.delete('/api/patients/:id', async (req, res) => {
+  try {
+    await pool.query("DELETE FROM patients WHERE id = $1", [req.params.id]);
+    res.json({ message: 'Patient deleted successfully.' });
+  } catch (err) { 
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete patient.' }); 
   }
 });
 

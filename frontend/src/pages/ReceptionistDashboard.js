@@ -75,6 +75,14 @@ function ReceptionistDashboard() {
     fetchData();
   };
 
+  // --- NEW: Delete Appointment (No-Show) ---
+  const handleDeletePatient = async (id) => {
+    if (window.confirm("Are you sure you want to completely delete this appointment? This cannot be undone.")) {
+      await fetch(`https://mahatme-backend.onrender.com/api/patients/${id}`, { method: 'DELETE' });
+      fetchData();
+    }
+  };
+
   // Call Next Patient for a Department
   const handleReceptionistCallNext = async (department) => {
     const res = await fetch('https://mahatme-backend.onrender.com/api/patients/next', {
@@ -86,7 +94,7 @@ function ReceptionistDashboard() {
     else alert(`The ${department} queue is currently empty.`);
   };
 
-  // --- NEW: SKIP & REQUEUE LOGIC ---
+  // --- SKIP & REQUEUE LOGIC ---
   const handleSkipPatient = async (patientId, department) => {
     try {
       // 1. Tell the backend to bump them down the line
@@ -192,7 +200,7 @@ function ReceptionistDashboard() {
         {activeTab === 'appointments' && (
           <section className="cms-panel">
             <h2>Future & Pending Appointments</h2>
-            <p style={{ color: '#666', marginBottom: '20px' }}>Patients listed here are scheduled but have not yet arrived. Click "Move to Queue" when they check in at the desk.</p>
+            <p style={{ color: '#666', marginBottom: '20px' }}>Patients listed here are scheduled but have not yet arrived.</p>
             
             <table className="detail-table" style={{ borderCollapse: 'collapse', width: '100%' }}>
               <thead style={{ backgroundColor: '#333', color: 'white' }}>
@@ -200,7 +208,7 @@ function ReceptionistDashboard() {
                   <th style={{ padding: '12px' }}>Date</th>
                   <th>Time</th>
                   <th>Patient Name</th>
-                  <th>Phone Number</th> {/* ADDED */}
+                  <th>Phone Number</th> 
                   <th>Department</th>
                   <th>Assigned Doctor</th>
                   <th>Action</th>
@@ -215,13 +223,19 @@ function ReceptionistDashboard() {
                       <td style={{ padding: '12px' }}>{p.appointment_date ? new Date(p.appointment_date).toLocaleDateString() : 'N/A'}</td>
                       <td style={{ fontWeight: 'bold' }}>{p.appointment_time}</td>
                       <td>{p.name}</td>
-                      <td>{p.phone}</td> {/* ADDED */}
+                      <td>{p.phone}</td> 
                       <td><span style={{ backgroundColor: '#eee', padding: '4px 8px', borderRadius: '4px' }}>{p.department}</span></td>
                       <td>{p.assigned_doctor !== 'Any' ? `Dr. ${p.assigned_doctor}` : 'Any'}</td>
                       <td>
-                        <button onClick={() => activatePatient(p.id)} style={{ background: '#28a745', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-                          Move to Queue ➡
-                        </button>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <button onClick={() => activatePatient(p.id)} style={{ background: '#28a745', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                            Move to Queue ➡
+                          </button>
+                          {/* --- NEW CANCEL BUTTON --- */}
+                          <button onClick={() => handleDeletePatient(p.id)} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                            🗑️ Cancel
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -238,14 +252,15 @@ function ReceptionistDashboard() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '30px' }}>
             {departments.map(dep => {
               const theme = deptColors[dep];
-              // Filter by department AND sort so 'Serving' is always at the top!
+              
+              // --- FIXED: Added p.is_active === true to ensure skipped patients don't show here ---
               const depPatients = activeQueue
-               .filter(p => p.department === dep && p.is_active === true) // 🔥 Added strict active check
+               .filter(p => p.department === dep && p.is_active === true)
                .sort((a, b) => {
-                if (a.status === 'Serving') return -1;
-                if (b.status === 'Serving') return 1;
+                 if (a.status === 'Serving') return -1;
+                 if (b.status === 'Serving') return 1;
                  return 0;
-               });
+                });
 
               return (
                 <div key={dep} style={{ backgroundColor: 'white', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', border: `1px solid ${theme.header}` }}>
@@ -283,13 +298,13 @@ function ReceptionistDashboard() {
                             <tr key={p.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', backgroundColor: p.status === 'Serving' ? 'white' : 'transparent' }}>
                               <td style={{ padding: '12px 20px', fontWeight: 'bold', fontSize: '16px' }}>{p.token}</td>
                               <td style={{ fontSize: '16px' }}>{p.name}</td>
-                              <td>{p.assigned_doctor !== 'Any' ? `Dr. ${p.assigned_doctor}` : 'Any Available'}</td>
+                              <td>{p.assigned_doctor !== 'Any' && p.assigned_doctor !== null ? `Dr. ${p.assigned_doctor}` : 'Any Available'}</td>
                               <td>{p.visit_type === 'Walk-in' ? '🚶 Walk-in' : `📅 ${p.appointment_time}`}</td>
                               <td>
                                 {p.status === 'Serving' ? (
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                     <span style={{ backgroundColor: '#28a745', color: 'white', padding: '4px 10px', borderRadius: '12px', fontWeight: 'bold', fontSize: '12px' }}>● SERVING</span>
-                                    {/* ADDED: The Skip Button */}
+                                    {/* The Skip Button */}
                                     <button onClick={() => handleSkipPatient(p.id, p.department)} style={{ backgroundColor: '#ffc107', color: '#333', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                                       🚫 Skip (Unavailable)
                                     </button>
@@ -323,21 +338,22 @@ function ReceptionistDashboard() {
                   <th>Date Recorded</th>
                   <th>Token History</th>
                   <th>Patient Name</th>
-                  <th>Phone Number</th> {/* ADDED */}
+                  <th>Phone Number</th> 
                   <th>Department</th>
                   <th>Doctor Seen</th>
                 </tr>
               </thead>
               <tbody>
-                {historyList.filter(p => p.status === 'Done' || p.visit_type === 'Walk-in').length === 0 ? (
+                {/* --- FIXED: Strictly filter ONLY people who are 'Done' --- */}
+                {historyList.filter(p => p.status === 'Done').length === 0 ? (
                   <tr><td colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>No history records found.</td></tr>
                 ) : (
-                  historyList.filter(p => p.status === 'Done' || (p.visit_type === 'Walk-in' && !p.is_active)).map(p => (
+                  historyList.filter(p => p.status === 'Done').map(p => (
                     <tr key={p.id}>
                       <td>{new Date(p.created_at).toLocaleDateString()}</td>
                       <td>{p.token}</td>
                       <td style={{ fontWeight: 'bold' }}>{p.name}</td>
-                      <td>{p.phone}</td> {/* ADDED */}
+                      <td>{p.phone}</td> 
                       <td>{p.department}</td>
                       <td>{p.assigned_doctor || 'N/A'}</td>
                     </tr>
