@@ -240,12 +240,12 @@ function ReceptionistDashboard() {
               const theme = deptColors[dep];
               // Filter by department AND sort so 'Serving' is always at the top!
               const depPatients = activeQueue
-               .filter(p => p.department === dep)
+               .filter(p => p.department === dep && p.is_active === true) // 🔥 Added strict active check
                .sort((a, b) => {
-                 if (a.status === 'Serving') return -1;
-                 if (b.status === 'Serving') return 1;
+                if (a.status === 'Serving') return -1;
+                if (b.status === 'Serving') return 1;
                  return 0;
-                });
+               });
 
               return (
                 <div key={dep} style={{ backgroundColor: 'white', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', border: `1px solid ${theme.header}` }}>
