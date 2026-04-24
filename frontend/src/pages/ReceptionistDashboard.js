@@ -215,10 +215,11 @@ function ReceptionistDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {historyList.filter(p => p.visit_type === 'Appointment' && !p.is_active).length === 0 ? (
+                {/* STRICT FILTER: Only show Appointments that are still 'Waiting' */}
+                {historyList.filter(p => p.visit_type === 'Appointment' && !p.is_active && p.status === 'Waiting').length === 0 ? (
                   <tr><td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>No pending appointments.</td></tr>
                 ) : (
-                  historyList.filter(p => p.visit_type === 'Appointment' && !p.is_active).map(p => (
+                  historyList.filter(p => p.visit_type === 'Appointment' && !p.is_active && p.status === 'Waiting').map(p => (
                     <tr key={p.id} style={{ borderBottom: '1px solid #ddd' }}>
                       <td style={{ padding: '12px' }}>{p.appointment_date ? new Date(p.appointment_date).toLocaleDateString() : 'N/A'}</td>
                       <td style={{ fontWeight: 'bold' }}>{p.appointment_time}</td>
@@ -231,7 +232,6 @@ function ReceptionistDashboard() {
                           <button onClick={() => activatePatient(p.id)} style={{ background: '#28a745', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
                             Move to Queue ➡
                           </button>
-                          {/* --- NEW CANCEL BUTTON --- */}
                           <button onClick={() => handleDeletePatient(p.id)} style={{ background: '#dc3545', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
                             🗑️ Cancel
                           </button>
@@ -344,7 +344,7 @@ function ReceptionistDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {/* --- FIXED: Strictly filter ONLY people who are 'Done' --- */}
+                {/* STRICT FILTER: Only show people who have completely finished their visit ('Done') */}
                 {historyList.filter(p => p.status === 'Done').length === 0 ? (
                   <tr><td colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>No history records found.</td></tr>
                 ) : (
