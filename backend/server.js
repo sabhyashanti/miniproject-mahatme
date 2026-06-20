@@ -21,12 +21,21 @@ pool.connect()
   .catch(err => console.error("❌ Database connection failed:", err.message));
 
 // --- EMAIL TRANSPORTER ---
+// NEW CODE: Forcing explicit SSL connection
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: true, // true for 465, false for other ports
+  auth: { 
+    user: process.env.EMAIL_USER, 
+    pass: process.env.EMAIL_PASS 
+  },
+  // Added this to prevent Render network timeouts
+  tls: {
+    rejectUnauthorized: false
+  }
 });
-
-const otpStore = new Map();
+const otpStore = new Map();add
 
 // ==========================================
 // --- AUTH & DOCTORS ---
