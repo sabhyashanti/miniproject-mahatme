@@ -35,7 +35,7 @@ const transporter = nodemailer.createTransport({
     rejectUnauthorized: false
   }
 });
-const otpStore = new Map();add
+const otpStore = new Map();
 
 // ==========================================
 // --- AUTH & DOCTORS ---
