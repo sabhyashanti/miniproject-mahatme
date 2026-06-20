@@ -21,11 +21,11 @@ pool.connect()
   .catch(err => console.error("❌ Database connection failed:", err.message));
 
 // --- EMAIL TRANSPORTER ---
-// --- EMAIL TRANSPORTER (UPDATED FOR RENDER PORT 587) ---
+// --- EMAIL TRANSPORTER (Forced IPv4 for Render) ---
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 587,
-  secure: false, // true for 465, false for other ports
+  secure: false, 
   requireTLS: true,
   auth: { 
     user: process.env.EMAIL_USER, 
@@ -33,7 +33,9 @@ const transporter = nodemailer.createTransport({
   },
   tls: {
     rejectUnauthorized: false
-  }
+  },
+  // 🔥 THE FIX: Force Node.js to use IPv4 instead of IPv6
+  family: 4 
 });
 const otpStore = new Map();
 
