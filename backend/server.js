@@ -21,16 +21,16 @@ pool.connect()
   .catch(err => console.error("❌ Database connection failed:", err.message));
 
 // --- EMAIL TRANSPORTER ---
-// NEW CODE: Forcing explicit SSL connection
+// --- EMAIL TRANSPORTER (UPDATED FOR RENDER PORT 587) ---
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 587,
-  secure: true, // true for 465, false for other ports
+  secure: false, // true for 465, false for other ports
+  requireTLS: true,
   auth: { 
     user: process.env.EMAIL_USER, 
     pass: process.env.EMAIL_PASS 
   },
-  // Added this to prevent Render network timeouts
   tls: {
     rejectUnauthorized: false
   }
